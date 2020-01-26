@@ -82,15 +82,18 @@ impl LC3 {
 	    memory: LC3Memory::new() // starts 0'd
 	}
     }
+
+    pub fn start(&mut self) {
+	self.halted = false;
+	self.memory.put(0xFFFE, 0b1);
+    }
     
     /// Executes one Fetch Decode Execute cycle
     pub fn clock(&mut self) -> LC3IO {
 	if !self.halted {
-	    // make sure memory updates
-	    self.memory.put(0xFFFE, 0b1);
 	    // fetch
 	    let instruction = self.memory.get(self.pc as u16);
-	    self.pc += 1;
+	    self.pc = self.pc.wrapping_add(1);
 	    // decode
 	    let code = (instruction as u16 & 0b1111000000000000) >> 12;
 	    // execute based on the code
@@ -113,6 +116,8 @@ impl LC3 {
 		_ => self.exception(1) // Illegal opcode exception
 	    }
 	}
+
+	
 	// check memory for char
 	if self.memory.last_char.is_some() {
 	    self.last_io = LC3IO::Display(self.memory.last_char.unwrap());
@@ -147,13 +152,13 @@ impl LC3 {
 
 	self.saved_usp = self.r6;
 	self.r6 = self.saved_ssp;
-	self.r6 -= 1;
+	self.r6 = self.r6.wrapping_sub(1);
 	self.memory.put(self.r6 as u16, self.psr);
-	self.r6 -= 1;
+	self.r6 = self.r6.wrapping_sub(1);
 	self.memory.put(self.r6 as u16, self.pc);
 	self.psr &= 0b0_111_1000_1111_1111;
 	self.psr |= (priority as i16 & 0b111) << 8;
-	self.pc = self.memory.get(0x100 as u16  + code as u16);
+	self.pc = self.memory.get(0x100 as u16 + code as u16);
 	
 	Ok(priority)
     }
@@ -162,9 +167,9 @@ impl LC3 {
     fn exception(&mut self, code: u8) {
 	self.saved_usp = self.r6;
 	self.r6 = self.saved_ssp;
-	self.r6 -= 1;
+	self.r6 = self.r6.wrapping_sub(1);
 	self.memory.put(self.r6 as u16, self.psr);
-	self.r6 -= 1;
+	self.r6 = self.r6.wrapping_sub(1);
 	self.memory.put(self.r6 as u16, self.pc);
 	self.psr &= 0b0_111_1111_1111_1111;
 	self.pc = self.memory.get(0x100 as u16  + code as u16);
@@ -214,7 +219,7 @@ impl LC3 {
 	let sr1 = (instruction >> 6) & 0b111;
 	if mux(instruction) { // immediate
 	    let imm = sign_extend(instruction & 0b11111, 5);
-	    let res = self.get_reg(sr1) + imm;
+	    let res = self.get_reg(sr1).wrapping_add(imm);
 	    self.codes(res);
 	    self.put_reg(dr, res);
 	} else { // register
@@ -256,7 +261,7 @@ impl LC3 {
 
 	// check if requested set bits match condition codes
 	if (i_n == 1 && n == 1) || (i_z == 1 && z == 1) || (i_p == 1 && p == 1) {
-	    self.pc += sign_extend(instruction & 0b111_111_111, 9);
+	    self.pc = self.pc.wrapping_add(sign_extend(instruction & 0b111_111_111, 9));
 	}
     }
 
@@ -271,7 +276,7 @@ impl LC3 {
 	let mode = (instruction >> 11) & 0b1;
 	let temp = self.pc;
 	if mode == 0b1 { // jsr
-	    self.pc += sign_extend(instruction & 0b11111111111, 11);
+	    self.pc = self.pc.wrapping_add(sign_extend(instruction & 0b11111111111, 11));
 	} else { // jsrr
 	    self.pc = self.get_reg((instruction >> 6) & 0b111);
 	}
@@ -281,7 +286,7 @@ impl LC3 {
     /// LD
     fn ld(&mut self, instruction: i16) {
 	let dr = (instruction >> 9) & 0b111;
-	let addr = self.pc + sign_extend(instruction & 0b111_111_111, 9);
+	let addr = self.pc.wrapping_add(sign_extend(instruction & 0b111_111_111, 9));
 	let res = self.memory.get(addr as u16);
 	self.codes(res);
 	self.put_reg(dr, res);
@@ -290,7 +295,7 @@ impl LC3 {
     /// LDI
     fn ldi(&mut self, instruction: i16) {
 	let dr = (instruction >> 9) & 0b111;
-	let addr = self.pc + sign_extend(instruction & 0b111_111_111, 9);
+	let addr = self.pc.wrapping_add(sign_extend(instruction & 0b111_111_111, 9));
 	let addr2 = self.memory.get(addr as u16);
 	let res = self.memory.get(addr2 as u16);
 	self.codes(res);
@@ -302,7 +307,7 @@ impl LC3 {
 	let dr = (instruction >> 9) & 0b111;
 	let base_r = self.get_reg((instruction >> 6) & 0b111);
 	let offset = sign_extend(instruction & 0b111111, 6);
-	let res = self.memory.get((base_r + offset) as u16);
+	let res = self.memory.get((base_r.wrapping_add(offset)) as u16);
 	self.codes(res);
 	self.put_reg(dr, res);
     }
@@ -310,7 +315,7 @@ impl LC3 {
     /// LEA
     fn lea(&mut self, instruction: i16) {
 	let dr = (instruction >> 9) & 0b111;
-	let addr = self.pc + sign_extend(instruction & 0b111_111_111, 9);
+	let addr = self.pc.wrapping_add(sign_extend(instruction & 0b111_111_111, 9));
 	self.codes(addr);
 	self.put_reg(dr, addr);
     }
@@ -330,10 +335,10 @@ impl LC3 {
 	if priv_bit == 0b0 { // ok
 	    // pop pc from supervisor stack
 	    self.pc = self.memory.get(self.r6 as u16);
-	    self.r6 += 1;
+	    self.r6 = self.r6.wrapping_add(1);
 	    // pop psr from supervisor stack
 	    self.psr = self.memory.get(self.r6 as u16);
-	    self.r6 += 1;
+	    self.r6 = self.r6.wrapping_add(1);
 	    // restore user stack ptr
 	    self.saved_ssp = self.r6;
 	    self.r6 = self.saved_usp;
@@ -345,14 +350,14 @@ impl LC3 {
     /// ST
     fn st(&mut self, instruction: i16) {
 	let sr = self.get_reg((instruction >> 9) & 0b111);
-	let addr = self.pc + sign_extend(instruction & 0b111_111_111, 9);
+	let addr = self.pc.wrapping_add(sign_extend(instruction & 0b111_111_111, 9));
 	self.memory.put(addr as u16, sr);
     }
 
     /// STI
     fn sti(&mut self, instruction: i16) {
 	let sr = self.get_reg((instruction >> 9) & 0b111);
-	let addr = self.pc + sign_extend(instruction & 0b111_111_111, 9);
+	let addr = self.pc.wrapping_add(sign_extend(instruction & 0b111_111_111, 9));
 	let addr2 = self.memory.get(addr as u16);
 	self.memory.put(addr2 as u16, sr);
     }
@@ -361,7 +366,7 @@ impl LC3 {
     fn stor(&mut self, instruction: i16) {
 	let sr = self.get_reg((instruction >> 9) & 0b111);
 	let base_r = self.get_reg((instruction >> 6) & 0b111);
-	let addr = base_r + sign_extend(instruction & 0b111111, 6);
+	let addr = base_r.wrapping_add(sign_extend(instruction & 0b111111, 6));
 	self.memory.put(addr as u16, sr);
     }
 
@@ -415,6 +420,7 @@ impl LC3Memory {
 	return self.mem[index as usize];
     }
     pub fn put(&mut self, index: u16, value: i16) {
+	// println!("put {:04x} @ {:04x}", value, index);
 	if index == 0xFE06 { // write here so cpu can check
 	    self.last_char = Some(value)
 	}
