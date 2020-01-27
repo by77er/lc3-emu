@@ -91,13 +91,13 @@ fn prepare_supervisor(lc3: &mut LC3) {
     //  PUTS
     lc3.memory.put(0x0240, 0b0001_001_111_1_00000); // ADD R1, R7, #0    ; save RET register
     lc3.memory.put(0x0241, 0b0001_010_000_1_00000); // ADD R2, R0, #0    ; move r0 to r2
-    lc3.memory.put(0x0242, 0b0110_000_010_000000); // LDR R0, [R2 + #0]  ; load character to r0
-    lc3.memory.put(0x0243, 0b0000_010_000000011);  // BRz PC + 3         ; if zero, go to return
-    lc3.memory.put(0x0244, 0b1111_0000_00100001);  // TRAP 0x21 (OUT)    ; print character
-    lc3.memory.put(0x0245, 0b0001_010_010_1_00001);// ADD R2, R2, #1     ; increment string ptr
-    lc3.memory.put(0x0246, 0b0000_111_111111011);  // BR PC - 5          ; go 5 back
+    lc3.memory.put(0x0242, 0b0110_000_010_000000);  // LDR R0, [R2 + #0] ; load character to r0
+    lc3.memory.put(0x0243, 0b0000_010_000000011);   // BRz PC + 3        ; if zero, go to return
+    lc3.memory.put(0x0244, 0b1111_0000_00100001);   // TRAP 0x21 (OUT)   ; print character
+    lc3.memory.put(0x0245, 0b0001_010_010_1_00001); // ADD R2, R2, #1    ; increment string ptr
+    lc3.memory.put(0x0246, 0b0000_111_111111011);   // BR PC - 5         ; go 5 back
     lc3.memory.put(0x0247, 0b0001_111_001_1_00000); // ADD R7, R1, #0    ; return address back to r7
-    lc3.memory.put(0x0248, 0b1100_000_111_000000); // RET
+    lc3.memory.put(0x0248, 0b1100_000_111_000000);  // RET
 	
     
     // TODO ...
